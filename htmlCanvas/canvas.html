@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta
+            name="viewport"
+            content="minimal-ui, width = device-width, initial-scale = 1.0, minimum-scale = 1, maximum-scale = 1, user-scalable = no"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes"/>
+    <meta name="mobile-web-app-capable" content="yes"/>
+    <meta http-equiv="X-UA-Compatible" content="ie=edge"/>
+
+    <title>Document</title>
+    <style>
+        #canvas {
+            border: 1px solid black;
+        }
+        .white_content {
+            display: none;
+            position: absolute;
+            top: 25%;
+            left: 25%;
+            width: 35%;
+            height: 55%;
+            padding: 20px;
+            border: 10px solid orange;
+            background-color: white;
+            z-index:1002;
+            overflow: auto;
+        }
+        #newImg{
+            width: 100px;
+            height: 100px;
+        }
+    </style>
+</head>
+
+<body>
+<div id="main">
+    <input type="file" id="imageLoader" name="imageLoader"/>
+    <button id="addRect" class="addRect">添加选择</button>
+    <button id="deleteRect" class="deleteRect">删除选中</button>
+    <button id="screenShot" class="screenShot">搜索</button>
+    <canvas id="canvas"></canvas>
+    <div id="light" class="white_content">
+        <div id="fileImage">
+
+        </div>
+        <a href = "javascript:void(0)" onclick = "closeDialog()">点这里关闭本窗口</a>
+    </div>
+
+</div>
+<script src="js/jquery-3.6.0.min.js"></script>
+<script src="js/load-image-all.min.js"></script>
+<script src="js/jcanvas.js"></script>
+<script>
+    // ========= Simple Template
+    let canvas = document.getElementById('canvas')
+
+    // ========= set canvas dimensions
+    canvas.width = window.innerWidth - 10
+    canvas.height = window.innerHeight / 1.5
+
+    // ========= Simple Template
+    let ctx = canvas.getContext('2d')
+    let canvasRect = canvas.getBoundingClientRect()
+    let canvasLeft = canvasRect.left
+    let canvasTop = canvasRect.top
+    let num = 0
+    let layer = 0
+    let layerName = 'layer' + layer
+    let layerGroup = 'Group' + layer
+    let penColor = 'bule'
+    let penWidth = 1
+    let Imgs = []
+
+    // ========= Upload image set as background
+    let $imageLoader = document.getElementById('imageLoader')
+    imageLoader.addEventListener('change', handleImage, false)
+
+    let makeSetBackgroundImg = (ctx, canvas) => img => {
+        let scale = Math.min(canvas.width / img.width, canvas.height / img.height)
+        var x = canvas.width / 2 - (img.width / 2) * scale
+        var y = canvas.height / 2 - (img.height / 2) * scale
+        $(canvas).drawImage({
+            source: img,
+            layer: true,
+            x: x,
+            y: y,
+            width: img.width * scale,
+            height: img.height * scale,
+            fromCenter: false
+        })
+    }
+
+    let setBackgroundImg = makeSetBackgroundImg(ctx, canvas)
+
+    function handleImage(e) {
+        clearCanvas()
+        loadImage(
+            e.target.files[0],
+            function (img) {
+                setBackgroundImg(img)
+                backgroundImg = img
+                img.src = e.target.result
+            },
+            {
+                orientation: true,
+                canvas: true
+            }
+        )
+    }
+
+    // ========= Clear canvas
+    let makeClearCanvas = (ctx, canvas) => () => ctx.clearRect(0, 0, canvas.width, canvas.height)
+    let clearCanvas = makeClearCanvas(ctx, canvas)
+
+    // ========= Add Rect
+    $('.addRect').click(function addRect(e) {
+        num++
+        layer++
+        layerName = 'layer' + layer
+        layerGroup = 'group' + layer
+        CanvasExt.drawRect()
+    })
+
+    // ========= Delete Rect
+    $('.deleteRect').click(function deleteRect(e) {
+        var chooses = $(canvas).getLayers(function (layer) {
+            return layer.name != null && layer.name.lastIndexOf('Change') > -1
+        })
+
+        if (chooses.length > 0) {
+            var group = $(canvas).getLayers(function (layer) {
+                return layer.name != null && layer.name.lastIndexOf(chooses[0].name.split('Change')[1]) > -1
+            })
+
+            for (var child of group) {
+                $(canvas)
+                    .removeLayers(function (layers) {
+                        return layers.name == child.name
+                    })
+                    .drawLayers()
+                    .saveCanvas()
+            }
+        }
+    })
+
+    // ========= Screen Shot
+    $('.screenShot').click(function screenShot() {
+        $(canvas)
+            .removeLayers(function (layers) {
+                return layers.name != null && layers.name.lastIndexOf('Change') > -1
+            })
+            .drawLayers()
+            .saveCanvas()
+
+        let layersList = $(canvas).getLayers(function (layers) {
+            return layers.name != null && layers.name.lastIndexOf('rect') > -1
+        })
+
+        for (let i = 0; i < layersList.length; i++) {
+            let content = layersList[i].canvas.getContext('2d')
+            var data = content.getImageData(
+                layersList[i].x + 3,
+                layersList[i].y + 3,
+                layersList[i].width - 6,
+                layersList[i].height - 6
+            )
+            content.putImageData(data, 0, 0)
+            Imgs.push(layersList[i].canvas.toDataURL('image/png'))
+        }
+
+        for (let i = 0; i < Imgs.length; i++) {
+            let Img = document.createElement('img')
+            // alert(Imgs[i]);
+            Img.src = Imgs[i]
+        }
+        var dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        Ajax(dataUrl);
+    })
+
+    // ========= Draw Action
+    CanvasExt = {
+        drawRect: function () {
+            let x = 0
+            let y = 0
+
+            // left top
+            let leftTopArgs = {
+                type: 'rectangle',
+                fillStyle: 'white',
+                strokeStyle: penColor,
+                strokeWidth: 0.2,
+                name: 'leftTopChange' + layerName,
+                groups: [layerGroup],
+                fromCenter: false,
+                x: 0,
+                y: 0,
+                width: 10,
+                height: 10,
+                mousedown: function (layer) {
+                    canvas.onmousemove = function (e) {
+                        $(this).animateLayer(
+                            layer,
+                            {
+                                x: e.clientX - canvasLeft - 5,
+                                y: e.clientY - canvasTop - 5
+                            },
+                            0
+                        )
+                        if (layer.name != null) {
+                            var group = $(canvas).getLayers(function (layer) {
+                                return layer.name != null && layer.name.lastIndexOf(layer.name.replace('leftTopChange', '')) > -1
+                            })
+
+                            for (var child of group) {
+                                if (child.groups[0] != layer.groups[0]) {
+                                    continue
+                                }
+                                if (child.name.lastIndexOf('rect') > -1) {
+                                    $(this).animateLayer(
+                                        child,
+                                        {
+                                            x: layer.x + 5,
+                                            y: layer.y + 5,
+                                            width: '-=' + e.movementX,
+                                            height: '-=' + e.movementY
+                                        },
+                                        0
+                                    )
+                                } else if (child.name.lastIndexOf('rightTopChange') > -1) {
+                                    $(this).animateLayer(
+                                        child,
+                                        {
+                                            y: layer.y
+                                        },
+                                        0
+                                    )
+                                } else if (child.name.lastIndexOf('leftBottomChange') > -1) {
+                                    $(this).animateLayer(
+                                        child,
+                                        {
+                                            x: layer.x
+                                        },
+                                        0
+                                    )
+                                } else if (child.name.lastIndexOf('text') > -1) {
+                                    $(this).animateLayer(
+                                        child,
+                                        {
+                                            x: layer.x + 16,
+                                            y: layer.y - 3
+                                        },
+                                        0
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                mouseup: function (layer) {
+                    canvas.onmousemove = null
+                }
+            }
+
+            // right top
+            let rightTopArgs = {
+                type: 'rectangle',
+                fillStyle: 'white',
+                strokeStyle: penColor,
+                strokeWidth: 0.2,
+                name: 'rightTopChange' + layerName,
+                groups: [layerGroup],
+                fromCenter: false,
+                x: 0,
+                y: 0,
+                width: 10,
+                height: 10,
+                mousedown: function (layer) {
+                    canvas.onmousemove = function (e) {
+                        $(this).animateLayer(
+                            layer,
+                            {
+                                x: e.clientX - canvasLeft - 5,
+                                y: e.clientY - canvasTop - 5
+                            },
+                            0
+                        )
+                        if (layer.name != null) {
+                            var group = $(canvas).getLayers(function (layer) {
+                                return layer.name != null && layer.name.lastIndexOf(layer.name.replace('rightTopChange', '')) > -1
+                            })
+
+                            for (var child of group) {
+                                if (child.groups[0] != layer.groups[0]) {
+                                    continue
+                                }
+                                if (child.name.lastIndexOf('rect') > -1) {
+                                    $(this).animateLayer(
+                                        child,
+                                        {
+                                            y: layer.y + 5,
+                                            width: layer.x - child.x + 5,
+                                            height: '-=' + e.movementY
+                                        },
+                                        0
+                                    )
+                                } else if (child.name.lastIndexOf('leftTopChange') > -1) {
+                                    $(this).animateLayer(
+                                        child,
+                                        {
+                                            y: layer.y
+                                        },
+                                        0
+                                    )
+                                } else if (child.name.lastIndexOf('rightBottomChange') > -1) {
+                                    $(this).animateLayer(
+                                        child,
+                                        {
+                                            x: layer.x
+                                        },
+                                        0
+                                    )
+                                } else if (child.name.lastIndexOf('text') > -1) {
+                                    $(this).animateLayer(
+                                        child,
+                                        {
+                                            y: layer.y - 3
+                                        },
+                                        0
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                mouseup: function (layer) {
+                    canvas.onmousemove = null
+                }
+            }
+
+            // left bottom
+            let leftBottomArgs = {
+                type: 'rectangle',
+                fillStyle: 'white',
+                strokeStyle: penColor,
+                strokeWidth: 0.2,
+                name: 'leftBottomChange' + layerName,
+                groups: [layerGroup],
+                fromCenter: false,
+                x: 0,
+                y: 0,
+                width: 10,
+                height: 10,
+                mousedown: function (layer) {
+                    canvas.onmousemove = function (e) {
+                        $(this).animateLayer(
+                            layer,
+                            {
+                                x: e.clientX - canvasLeft - 5,
+                                y: e.clientY - canvasTop - 5
+                            },
+                            0
+                        )
+                        if (layer.name != null) {
+                            var group = $(canvas).getLayers(function (layer) {
+                                return layer.name != null && layer.name.lastIndexOf(layer.name.replace('leftBottomChange', '')) > -1
+                            })
+
+                            for (var child of group) {
+                                if (child.groups[0] != layer.groups[0]) {
+                                    continue
+                                }
+                                if (child.name.lastIndexOf('rect') > -1) {
+                                    $(this).animateLayer(
+                                        child,
+                                        {
+                                            x: layer.x + 5,
+                                            width: '-=' + e.movementX,
+                                            height: layer.y - child.y + 5
+                                        },
+                                        0
+                                    )
+                                } else if (child.name.lastIndexOf('leftTopChange') > -1) {
+                                    $(this).animateLayer(
+                                        child,
+                                        {
+                                            x: layer.x
+                                        },
+                                        0
+                                    )
+                                } else if (child.name.lastIndexOf('rightBottomChange') > -1) {
+                                    $(this).animateLayer(
+                                        child,
+                                        {
+                                            y: layer.y
+                                        },
+                                        0
+                                    )
+                                } else if (child.name.lastIndexOf('text') > -1) {
+                                    $(this).animateLayer(
+                                        child,
+                                        {
+                                            x: layer.x + 16
+                                        },
+                                        0
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                mouseup: function (layer) {
+                    canvas.onmousemove = null
+                }
+            }
+
+            // right bottom
+            let rightBottomArgs = {
+                type: 'rectangle',
+                fillStyle: 'white',
+                strokeStyle: penColor,
+                strokeWidth: 0.2,
+                name: 'rightBottomChange' + layerName,
+                groups: [layerGroup],
+                fromCenter: false,
+                x: 0,
+                y: 0,
+                width: 10,
+                height: 10,
+                mousedown: function (layer) {
+                    canvas.onmousemove = function (e) {
+                        $(this).animateLayer(
+                            layer,
+                            {
+                                x: e.clientX - canvasLeft - 5,
+                                y: e.clientY - canvasTop - 5
+                            },
+                            0
+                        )
+                        if (layer.name != null) {
+                            var group = $(canvas).getLayers(function (layer) {
+                                return (
+                                    layer.name != null && layer.name.lastIndexOf(layer.name.replace('rightBottomChange', '')) > -1
+                                )
+                            })
+
+                            for (var child of group) {
+                                if (child.groups[0] != layer.groups[0]) {
+                                    continue
+                                }
+                                if (child.name.lastIndexOf('rect') > -1) {
+                                    $(this).animateLayer(
+                                        child,
+                                        {
+                                            width: layer.x - child.x + 5,
+                                            height: layer.y - child.y + 5
+                                        },
+                                        0
+                                    )
+                                } else if (child.name.lastIndexOf('rightTopChange') > -1) {
+                                    $(this).animateLayer(
+                                        child,
+                                        {
+                                            x: layer.x
+                                        },
+                                        0
+                                    )
+                                } else if (child.name.lastIndexOf('leftBottomChange') > -1) {
+                                    $(this).animateLayer(
+                                        child,
+                                        {
+                                            y: layer.y
+                                        },
+                                        0
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                mouseup: function (layer) {
+                    canvas.onmousemove = null
+                }
+            }
+
+            // text
+            let textArgs = {
+                type: 'text',
+                fillStyle: penColor,
+                strokeWidth: 0.7,
+                name: 'text' + layerName,
+                groups: [layerGroup],
+                layer: true,
+                x: 0,
+                y: 0,
+                fontSize: 14,
+                fontFamily: 'Verdana, sans-serif',
+                text: num
+            }
+
+            // rect
+            let rectArgs = {
+                type: 'rectangle',
+                strokeStyle: penColor,
+                strokeWidth: penWidth,
+                name: 'rect' + layerName,
+                groups: [layerGroup],
+                dragGroups: [layerGroup],
+                fromCenter: false,
+                x: 0,
+                y: 0,
+                width: 1,
+                height: 1,
+                mousedown: function (layer) {
+                    $(canvas).removeLayers(function (layers) {
+                        return layers.name != null && layers.name.lastIndexOf('text' + layer.name.replace('rect', '')) > -1
+                    })
+                    $(canvas).removeLayers(function (layers) {
+                        return layers.name != null && layers.name.lastIndexOf('Change') > -1
+                    })
+
+                    leftTopArgs['x'] = layer.x - 5
+                    leftTopArgs['y'] = layer.y - 5
+                    rightTopArgs['x'] = layer.x + layer.width - 5
+                    rightTopArgs['y'] = layer.y - 5
+                    leftBottomArgs['x'] = layer.x - 5
+                    leftBottomArgs['y'] = layer.y + layer.height - 5
+                    rightBottomArgs['x'] = layer.x + layer.width - 5
+                    rightBottomArgs['y'] = layer.y + layer.height - 5
+
+                    textArgs['x'] = layer.x + 10
+                    textArgs['y'] = layer.y - 8
+
+                    $(canvas)
+                        .addLayer(textArgs)
+                        .addLayer(leftTopArgs)
+                        .addLayer(rightTopArgs)
+                        .addLayer(leftBottomArgs)
+                        .addLayer(rightBottomArgs)
+                        .drawLayers()
+                        .saveCanvas()
+                }
+            }
+
+            canvas.onmousedown = function (e) {
+                rectArgs['x'] = x = e.clientX - canvasLeft
+                rectArgs['y'] = y = e.clientY - canvasTop
+
+                $(canvas).addLayer(rectArgs).drawLayers().saveCanvas()
+
+                canvas.onmousemove = function (e) {
+                    $(canvas).removeLayerGroup(layerGroup)
+
+                    rectArgs['width'] = e.clientX - canvasLeft - x
+                    rectArgs['height'] = e.clientY - canvasTop - y
+
+                    $(canvas).addLayer(rectArgs).drawLayers()
+                }
+            }
+
+            canvas.onmouseup = function (e) {
+                if (canvas.onmousedown != null) {
+                    $(canvas).removeLayerGroup(layerGroup)
+
+                    rectArgs['width'] = e.clientX - canvasLeft - x
+                    rectArgs['height'] = e.clientY - canvasTop - y
+
+                    $(canvas).addLayer(rectArgs).drawLayers().saveCanvas()
+                    $(canvas).triggerLayerEvent(rectArgs.name, 'mousedown')
+                }
+
+                canvas.onmousedown = null
+                canvas.onmousemove = null
+                canvas.onmouseup = null
+            }
+        }
+    }
+
+    function Ajax(dataUrl) {
+        var strInfo = "";
+        $.ajax({
+            type: "POST",
+            url: "imagesearch.php",
+            data: "imgdata=" + dataUrl,
+            success: function (msg) {
+                var data = JSON.parse(msg);
+                document.getElementById('light').style.display='block';
+                for (var i =0; i < data.length; i ++){
+                    var jsonData =  data[i];
+                    var imageFile = jsonData['image_file'];
+                    var divI = document.getElementById("fileImage");
+                    var img = document.createElement("img");
+                    var input = document.createElement("input")
+                    //设置 img 属性，如 id
+                    img.setAttribute("id", "newImg");
+                    //设置 img 图片地址
+                    img.src = imageFile;
+                    var array = imageFile.split("/");
+                    input.value= decodeURIComponent(array[array.length - 1]) ;
+                    input.disabled = true;
+                    // // var childEles = divI.childNodes;
+                    // while(divI.hasChildNodes())
+                    // {
+                    //     divI.removeChild(divI.firstChild);
+                    // }
+                    divI.appendChild(input);
+                    divI.appendChild(img);
+                    // alert(imageFile)
+                }
+            }
+        });
+    }
+
+    function closeDialog(){
+        document.getElementById('light').style.display='none';
+    }
+</script>
+</body>
+</html>

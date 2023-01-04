@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta
+            name="viewport"
+            content="minimal-ui, width = device-width, initial-scale = 1.0, minimum-scale = 1, maximum-scale = 1, user-scalable = no"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes"/>
+    <meta name="mobile-web-app-capable" content="yes"/>
+    <meta http-equiv="X-UA-Compatible" content="ie=edge"/>
+
+    <title>批量上传图片</title>
+
+</head>
+
+<body>
+<div id="main">
+    <form action="bachImageAdd.php" encType="multipart/form-data" method="post" >
+        <div><input type="file" name="csvfile"/> &nbsp;<input type="submit" value="上传"></div>
+        <div id="upload_info" style="width:100%;border:1px solid #809db9;display:none" ></div>
+    </form>
+</div>
+<script src="js/jquery-3.6.0.min.js"></script>
+</body>
+</html>
